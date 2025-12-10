@@ -505,7 +505,7 @@ WHERE relation::regclass::text LIKE '%vehicle%';
 
 This project is created for educational purposes as part of Database Systems Course 180B.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - PostgreSQL Global Development Group for excellent documentation
 - Flask Development Team for the web framework
@@ -520,5 +520,5 @@ For questions or issues:
 
 ---
 
-**Built with ❤️ for Database Systems 180B**
+**Built for Database Systems 180B**
 
