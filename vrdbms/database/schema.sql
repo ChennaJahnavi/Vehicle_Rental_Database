@@ -48,6 +48,10 @@ CREATE TABLE branch (
     CONSTRAINT unique_branch_email UNIQUE(email)
 );
 
+CREATE INDEX idx_branch_city ON branch(city);
+CREATE INDEX idx_branch_state ON branch(state);
+CREATE INDEX idx_branch_location ON branch(city, state);
+
 -- ============================================================================
 -- TABLE: vehicle_category
 -- Stores vehicle categories/types
@@ -61,6 +65,9 @@ CREATE TABLE vehicle_category (
     seating_capacity INTEGER NOT NULL CHECK (seating_capacity > 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_category_rate ON vehicle_category(daily_rate);
+CREATE INDEX idx_category_capacity ON vehicle_category(seating_capacity);
 
 -- ============================================================================
 -- TABLE: vehicle
@@ -87,6 +94,9 @@ CREATE TABLE vehicle (
 CREATE INDEX idx_vehicle_status ON vehicle(status);
 CREATE INDEX idx_vehicle_branch ON vehicle(branch_id);
 CREATE INDEX idx_vehicle_category ON vehicle(category_id);
+CREATE INDEX idx_vehicle_status_branch ON vehicle(status, branch_id);
+CREATE INDEX idx_vehicle_license_plate ON vehicle(license_plate);
+CREATE INDEX idx_vehicle_make_model ON vehicle(make, model);
 
 -- ============================================================================
 -- TABLE: customer
@@ -112,6 +122,8 @@ CREATE TABLE customer (
 
 CREATE INDEX idx_customer_email ON customer(email);
 CREATE INDEX idx_customer_phone ON customer(phone);
+CREATE INDEX idx_customer_name ON customer(last_name, first_name);
+CREATE INDEX idx_customer_city ON customer(city);
 
 -- ============================================================================
 -- TABLE: employee
@@ -130,6 +142,9 @@ CREATE TABLE employee (
     salary DECIMAL(10, 2) CHECK (salary > 0),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_employee_branch ON employee(branch_id);
+CREATE INDEX idx_employee_position ON employee(position);
 
 -- ============================================================================
 -- TABLE: rental
@@ -162,6 +177,10 @@ CREATE INDEX idx_rental_customer ON rental(customer_id);
 CREATE INDEX idx_rental_vehicle ON rental(vehicle_id);
 CREATE INDEX idx_rental_status ON rental(status);
 CREATE INDEX idx_rental_dates ON rental(start_date, end_date);
+CREATE INDEX idx_rental_branch ON rental(branch_id);
+CREATE INDEX idx_rental_status_date ON rental(status, rental_date DESC);
+CREATE INDEX idx_rental_employee ON rental(employee_id);
+CREATE INDEX idx_rental_return_date ON rental(return_date);
 
 -- ============================================================================
 -- TABLE: payment
@@ -181,6 +200,8 @@ CREATE TABLE payment (
 
 CREATE INDEX idx_payment_rental ON payment(rental_id);
 CREATE INDEX idx_payment_date ON payment(payment_date);
+CREATE INDEX idx_payment_method ON payment(payment_method);
+CREATE INDEX idx_payment_date_amount ON payment(payment_date DESC, amount);
 
 -- ============================================================================
 -- TABLE: maintenance
@@ -202,6 +223,9 @@ CREATE TABLE maintenance (
 
 CREATE INDEX idx_maintenance_vehicle ON maintenance(vehicle_id);
 CREATE INDEX idx_maintenance_date ON maintenance(maintenance_date);
+CREATE INDEX idx_maintenance_type ON maintenance(maintenance_type);
+CREATE INDEX idx_maintenance_next_service ON maintenance(next_service_date);
+CREATE INDEX idx_maintenance_vehicle_date ON maintenance(vehicle_id, maintenance_date DESC);
 
 -- ============================================================================
 -- VIEWS

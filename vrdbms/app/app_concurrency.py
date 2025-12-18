@@ -1,6 +1,6 @@
 """
 Vehicle Rental Database Management System (VRDBMS)
-Flask Web Application
+Flask Web Application with Concurrency Demo
 """
 
 from flask import Flask, render_template, jsonify, request
@@ -9,6 +9,7 @@ from psycopg2.extras import RealDictCursor
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 import time
+import threading
 
 app = Flask(__name__)
 app.secret_key = 'vrdbms_secret_key_2024'
@@ -44,6 +45,7 @@ def serialize_data(data):
 
 @app.route('/')
 def index():
+    """Main dashboard"""
     conn = get_db_connection()
     if not conn:
         return "<h1>Database Connection Error</h1>"
@@ -60,19 +62,6 @@ def index():
         cur.execute("SELECT COUNT(*) as count FROM customer")
         total_customers = cur.fetchone()['count']
         
-        cur.execute("SELECT COALESCE(SUM(total_amount), 0) as revenue FROM rental WHERE status = 'completed'")
-        total_revenue = float(cur.fetchone()['revenue'])
-        
-        cur.execute("""
-            SELECT r.rental_id, c.first_name || ' ' || c.last_name AS customer_name,
-                   v.make || ' ' || v.model AS vehicle, r.rental_date, r.status
-            FROM rental r
-            JOIN customer c ON r.customer_id = c.customer_id
-            JOIN vehicle v ON r.vehicle_id = v.vehicle_id
-            ORDER BY r.rental_date DESC LIMIT 5
-        """)
-        rentals = serialize_data(cur.fetchall())
-        
         cur.close()
         conn.close()
         
@@ -80,43 +69,42 @@ def index():
         <!DOCTYPE html>
         <html>
         <head>
-            <title>VRDBMS</title>
+            <title>VRDBMS - Concurrency Demo</title>
             <style>
-                body {{ font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px;
+                body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px;
                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }}
-                .container {{ background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); }}
+                .container {{ background: white; padding: 30px; border-radius: 10px; 
+                            box-shadow: 0 5px 20px rgba(0,0,0,0.2); max-width: 1200px; margin: 0 auto; }}
                 h1 {{ color: #667eea; text-align: center; }}
-                .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 30px 0; }}
+                .stats {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 30px 0; }}
                 .stat-card {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;
                             padding: 20px; border-radius: 8px; text-align: center; }}
-                .stat-value {{ font-size: 2.5em; font-weight: bold; margin: 10px 0; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-                th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
-                th {{ background: #667eea; color: white; }}
-                tr:hover {{ background: #f5f5f5; }}
-                .badge {{ padding: 5px 10px; border-radius: 3px; font-size: 0.85em; font-weight: bold; }}
-                .badge-success {{ background: #28a745; color: white; }}
-                .badge-warning {{ background: #ffc107; color: #333; }}
-                .badge-info {{ background: #17a2b8; color: white; }}
-                .success-msg {{ background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin-bottom: 20px; }}
-                .demo-link {{ text-align: center; margin: 30px 0; }}
-                .demo-btn {{ display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px 40px;
+                .stat-value {{ font-size: 2em; font-weight: bold; }}
+                .demo-link {{ text-align: center; margin: 40px 0; }}
+                .demo-btn {{ display: inline-block; background: #28a745; color: white; padding: 20px 40px;
                            text-decoration: none; border-radius: 8px; font-size: 1.2em; font-weight: bold;
                            box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: all 0.3s; }}
-                .demo-btn:hover {{ transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.3); }}
+                .demo-btn:hover {{ background: #218838; transform: translateY(-2px); 
+                                  box-shadow: 0 6px 15px rgba(0,0,0,0.3); }}
             </style>
         </head>
         <body>
             <div class="container">
                 <h1>🚗 Vehicle Rental Database Management System</h1>
-                <div class="success-msg">✅ <strong>Database Connected Successfully!</strong></div>
                 
-                <h2>Dashboard Statistics</h2>
                 <div class="stats">
-                    <div class="stat-card"><h3>Available Vehicles</h3><div class="stat-value">{available_vehicles}</div></div>
-                    <div class="stat-card"><h3>Active Rentals</h3><div class="stat-value">{active_rentals}</div></div>
-                    <div class="stat-card"><h3>Total Customers</h3><div class="stat-value">{total_customers}</div></div>
-                    <div class="stat-card"><h3>Total Revenue</h3><div class="stat-value">${total_revenue:,.2f}</div></div>
+                    <div class="stat-card">
+                        <h3>Available Vehicles</h3>
+                        <div class="stat-value">{available_vehicles}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Active Rentals</h3>
+                        <div class="stat-value">{active_rentals}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Total Customers</h3>
+                        <div class="stat-value">{total_customers}</div>
+                    </div>
                 </div>
                 
                 <div class="demo-link">
@@ -124,33 +112,6 @@ def index():
                         🔒 Concurrency Control Demo
                     </a>
                 </div>
-                
-                <h2>Recent Rentals</h2>
-                <table>
-                    <thead><tr><th>ID</th><th>Customer</th><th>Vehicle</th><th>Date</th><th>Status</th></tr></thead>
-                    <tbody>
-        """
-        
-        for rental in rentals:
-            status_map = {'active': 'badge-success', 'pending': 'badge-warning', 'completed': 'badge-info'}
-            status_class = status_map.get(rental['status'], 'badge-info')
-            html += f"<tr><td>{rental['rental_id']}</td><td>{rental['customer_name']}</td><td>{rental['vehicle']}</td><td>{rental['rental_date']}</td><td><span class='badge {status_class}'>{rental['status']}</span></td></tr>"
-        
-        html += """
-                    </tbody>
-                </table>
-                <div style="margin-top: 40px; padding: 20px; background: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 5px;">
-                    <h3 style="margin-top: 0;">✅ Project Complete!</h3>
-                    <ul>
-                        <li>✅ 8 normalized tables (3NF)</li>
-                        <li>✅ 5 analytical views</li>
-                        <li>✅ 4 triggers and 4 stored procedures</li>
-                        <li>✅ 117 sample records loaded</li>
-                    </ul>
-                </div>
-                <footer style="text-align: center; margin-top: 40px; color: #666;">
-                    <p>&copy; 2024 VRDBMS | Database Course 180B</p>
-                </footer>
             </div>
         </body>
         </html>
@@ -159,6 +120,7 @@ def index():
         
     except Exception as e:
         return f"<h1>Error</h1><p>{str(e)}</p>"
+
 
 @app.route('/concurrency-demo')
 def concurrency_demo():
@@ -200,7 +162,7 @@ def book_without_lock():
     data = request.json
     customer_name = data.get('customer_name')
     vehicle_id = data.get('vehicle_id')
-    delay = data.get('delay', 0)
+    delay = data.get('delay', 0)  # Simulate processing time
     
     conn = get_db_connection()
     if not conn:
@@ -209,6 +171,7 @@ def book_without_lock():
     try:
         cur = conn.cursor()
         
+        # Step 1: Check if vehicle is available (NO LOCK)
         cur.execute("SELECT vehicle_id, status FROM vehicle WHERE vehicle_id = %s", (vehicle_id,))
         vehicle = cur.fetchone()
         
@@ -218,8 +181,10 @@ def book_without_lock():
         if vehicle['status'] != 'available':
             return jsonify({'success': False, 'message': f"Vehicle is {vehicle['status']}", 'step': 'check'})
         
+        # Step 2: Simulate processing delay (this is where race condition happens!)
         time.sleep(delay)
         
+        # Step 3: Create rental (both users can get here!)
         cur.execute("""
             INSERT INTO rental (customer_id, vehicle_id, branch_id, start_date, end_date, start_mileage, daily_rate, status)
             VALUES (1, %s, 1, CURRENT_DATE, CURRENT_DATE + 7, 10000, 50.00, 'pending')
@@ -258,8 +223,11 @@ def book_with_lock():
     
     try:
         cur = conn.cursor()
+        
+        # Start transaction
         conn.autocommit = False
         
+        # Step 1: Check and LOCK the vehicle (SELECT FOR UPDATE)
         cur.execute("""
             SELECT vehicle_id, status, make, model
             FROM vehicle 
@@ -273,8 +241,12 @@ def book_with_lock():
             conn.rollback()
             return jsonify({'success': False, 'message': 'Vehicle not found', 'step': 'check'})
         
+        # Vehicle is now LOCKED for this transaction
+        
+        # Step 2: Simulate processing delay (other users will WAIT here)
         time.sleep(delay)
         
+        # Step 3: Check if still available
         if vehicle['status'] != 'available':
             conn.rollback()
             return jsonify({
@@ -283,6 +255,7 @@ def book_with_lock():
                 'step': 'unavailable'
             })
         
+        # Step 4: Create rental
         cur.execute("""
             INSERT INTO rental (customer_id, vehicle_id, branch_id, start_date, end_date, start_mileage, daily_rate, status)
             VALUES (%s, %s, 1, CURRENT_DATE, CURRENT_DATE + 7, 
@@ -293,8 +266,10 @@ def book_with_lock():
         
         rental = cur.fetchone()
         
+        # Step 5: Update vehicle status
         cur.execute("UPDATE vehicle SET status = 'rented' WHERE vehicle_id = %s", (vehicle_id,))
         
+        # Commit transaction (releases lock)
         conn.commit()
         cur.close()
         conn.close()
@@ -321,6 +296,7 @@ def reset_demo():
     try:
         cur = conn.cursor()
         
+        # Reset vehicles to available
         cur.execute("""
             UPDATE vehicle 
             SET status = 'available' 
@@ -331,6 +307,7 @@ def reset_demo():
             )
         """)
         
+        # Delete test rentals from last 5 minutes
         cur.execute("""
             DELETE FROM rental 
             WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '5 minutes'
@@ -351,8 +328,14 @@ if __name__ == '__main__':
     print("=" * 60)
     print("🚗 VRDBMS - Vehicle Rental Database Management System")
     print("=" * 60)
-    print("\n📊 Access the dashboard at: http://localhost:5001")
-    print("   Concurrency Demo: http://localhost:5001/concurrency-demo")
+    print("\n📊 Access the application at:")
+    print("   Main Dashboard: http://localhost:5002")
+    print("   Concurrency Demo: http://localhost:5002/concurrency-demo")
     print("\n💡 Press Ctrl+C to stop the server")
     print("=" * 60)
-    app.run(debug=True, host='0.0.0.0', port=5001, threaded=True)
+    app.run(debug=True, host='0.0.0.0', port=5002, threaded=True)
+
+
+
+
+

@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Concurrency Control Demo - VRDBMS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        
+        .mode-selector {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .mode-btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .mode-btn.active {
+            background: #667eea;
+            color: white;
+            transform: scale(1.05);
+        }
+        
+        .mode-btn:not(.active) {
+            background: #e0e0e0;
+            color: #666;
+        }
+        
+        .mode-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .demo-area {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .user-panel {
+            border: 3px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            background: #f9f9f9;
+        }
+        
+        .user-panel.user1 {
+            border-color: #4CAF50;
+        }
+        
+        .user-panel.user2 {
+            border-color: #2196F3;
+        }
+        
+        .user-header {
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            color: white;
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+        
+        .user1 .user-header {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+        }
+        
+        .user2 .user-header {
+            background: linear-gradient(135deg, #2196F3, #1976D2);
+        }
+        
+        .vehicle-info {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .vehicle-info h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .vehicle-detail {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .vehicle-detail:last-child {
+            border-bottom: none;
+        }
+        
+        .book-btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+        
+        .user1 .book-btn {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .user1 .book-btn:hover:not(:disabled) {
+            background: #45a049;
+        }
+        
+        .user2 .book-btn {
+            background: #2196F3;
+            color: white;
+        }
+        
+        .user2 .book-btn:hover:not(:disabled) {
+            background: #1976D2;
+        }
+        
+        .book-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .status-log {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            min-height: 200px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .log-entry {
+            padding: 5px;
+            margin: 3px 0;
+            border-left: 3px solid #ddd;
+            padding-left: 10px;
+        }
+        
+        .log-entry.info {
+            border-left-color: #2196F3;
+            background: #E3F2FD;
+        }
+        
+        .log-entry.success {
+            border-left-color: #4CAF50;
+            background: #E8F5E9;
+        }
+        
+        .log-entry.warning {
+            border-left-color: #FF9800;
+            background: #FFF3E0;
+        }
+        
+        .log-entry.error {
+            border-left-color: #F44336;
+            background: #FFEBEE;
+        }
+        
+        .log-entry.waiting {
+            border-left-color: #9C27B0;
+            background: #F3E5F5;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+        
+        .reset-btn {
+            padding: 12px 30px;
+            background: #FF5722;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .reset-btn:hover {
+            background: #E64A19;
+        }
+        
+        .explanation {
+            background: #E7F3FF;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 30px;
+            border-left: 5px solid #2196F3;
+        }
+        
+        .explanation h3 {
+            color: #1976D2;
+            margin-bottom: 10px;
+        }
+        
+        .comparison-table {
+            width: 100%;
+            margin-top: 15px;
+            border-collapse: collapse;
+        }
+        
+        .comparison-table th,
+        .comparison-table td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        
+        .comparison-table th {
+            background: #667eea;
+            color: white;
+        }
+        
+        .comparison-table .bad {
+            background: #FFEBEE;
+            color: #C62828;
+        }
+        
+        .comparison-table .good {
+            background: #E8F5E9;
+            color: #2E7D32;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 Concurrency Control Demonstration</h1>
+        <p class="subtitle">Two users trying to book the same vehicle simultaneously</p>
+        
+        <div class="mode-selector">
+            <button class="mode-btn" id="withoutLockBtn" onclick="setMode('without')">
+                ❌ WITHOUT Locking (Race Condition)
+            </button>
+            <button class="mode-btn active" id="withLockBtn" onclick="setMode('with')">
+                ✅ WITH Locking (Safe)
+            </button>
+        </div>
+        
+        <div class="demo-area">
+            <!-- User 1 Panel -->
+            <div class="user-panel user1">
+                <div class="user-header">👤 User 1: Alice</div>
+                
+                <div class="vehicle-info" id="vehicle-info-1">
+                    <h3>Selected Vehicle</h3>
+                    <div id="vehicle-details-1">
+                        <p>Click "Start Demo" to load vehicle</p>
+                    </div>
+                </div>
+                
+                <button class="book-btn" id="book-btn-1" onclick="bookVehicle(1)" disabled>
+                    Book This Vehicle
+                </button>
+                
+                <div class="status-log" id="log-1">
+                    <div class="log-entry info">Waiting to start demo...</div>
+                </div>
+            </div>
+            
+            <!-- User 2 Panel -->
+            <div class="user-panel user2">
+                <div class="user-header">👤 User 2: Bob</div>
+                
+                <div class="vehicle-info" id="vehicle-info-2">
+                    <h3>Selected Vehicle</h3>
+                    <div id="vehicle-details-2">
+                        <p>Click "Start Demo" to load vehicle</p>
+                    </div>
+                </div>
+                
+                <button class="book-btn" id="book-btn-2" onclick="bookVehicle(2)" disabled>
+                    Book This Vehicle
+                </button>
+                
+                <div class="status-log" id="log-2">
+                    <div class="log-entry info">Waiting to start demo...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="reset-btn" onclick="startDemo()">🚀 Start Demo</button>
+            <button class="reset-btn" onclick="resetDemo()">🔄 Reset</button>
+            <button class="reset-btn" onclick="window.location.href='/'">🏠 Home</button>
+        </div>
+        
+        <div class="explanation">
+            <h3>📚 Understanding the Demo</h3>
+            <table class="comparison-table">
+                <tr>
+                    <th>Scenario</th>
+                    <th>WITHOUT Locking (Race Condition)</th>
+                    <th>WITH Locking (Safe)</th>
+                </tr>
+                <tr>
+                    <td><strong>What Happens</strong></td>
+                    <td class="bad">❌ Both users check availability independently<br>Both see "available"<br>Both create bookings<br><strong>DOUBLE BOOKING!</strong></td>
+                    <td class="good">✅ User 1 locks vehicle with SELECT FOR UPDATE<br>User 2 WAITS for lock<br>User 2 sees vehicle is taken<br><strong>Only ONE booking!</strong></td>
+                </tr>
+                <tr>
+                    <td><strong>SQL Used</strong></td>
+                    <td class="bad">SELECT * FROM vehicle WHERE id = X;<br>(No locking)</td>
+                    <td class="good">SELECT * FROM vehicle WHERE id = X <strong>FOR UPDATE</strong>;<br>(Row locked)</td>
+                </tr>
+                <tr>
+                    <td><strong>Result</strong></td>
+                    <td class="bad">❌ Data corruption<br>❌ Angry customers<br>❌ Lost revenue</td>
+                    <td class="good">✅ Data integrity<br>✅ Fair booking<br>✅ Production ready</td>
+                </tr>
+            </table>
+            
+            <p style="margin-top: 15px;">
+                <strong>💡 Key Takeaway:</strong> <code>SELECT FOR UPDATE</code> prevents race conditions by locking rows during transactions. 
+                This is essential for any multi-user database application.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'with';
+        let currentVehicle = null;
+        
+        function setMode(mode) {
+            currentMode = mode;
+            
+            const withBtn = document.getElementById('withLockBtn');
+            const withoutBtn = document.getElementById('withoutLockBtn');
+            
+            if (mode === 'with') {
+                withBtn.classList.add('active');
+                withoutBtn.classList.remove('active');
+            } else {
+                withBtn.classList.remove('active');
+                withoutBtn.classList.add('active');
+            }
+            
+            addLog(1, 'info', `Mode changed to: ${mode === 'with' ? 'WITH Locking ✅' : 'WITHOUT Locking ❌'}`);
+            addLog(2, 'info', `Mode changed to: ${mode === 'with' ? 'WITH Locking ✅' : 'WITHOUT Locking ❌'}`);
+        }
+        
+        function addLog(user, type, message) {
+            const log = document.getElementById(`log-${user}`);
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function clearLog(user) {
+            const log = document.getElementById(`log-${user}`);
+            log.innerHTML = '';
+        }
+        
+        async function startDemo() {
+            // Clear logs
+            clearLog(1);
+            clearLog(2);
+            
+            addLog(1, 'info', 'Loading available vehicle...');
+            addLog(2, 'info', 'Loading available vehicle...');
+            
+            try {
+                const response = await fetch('/api/get-available-vehicle');
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentVehicle = data.vehicle;
+                    
+                    // Update both panels with same vehicle
+                    for (let user of [1, 2]) {
+                        document.getElementById(`vehicle-details-${user}`).innerHTML = `
+                            <div class="vehicle-detail"><strong>Vehicle ID:</strong> <span>${currentVehicle.vehicle_id}</span></div>
+                            <div class="vehicle-detail"><strong>Make/Model:</strong> <span>${currentVehicle.make} ${currentVehicle.model}</span></div>
+                            <div class="vehicle-detail"><strong>Year:</strong> <span>${currentVehicle.year}</span></div>
+                            <div class="vehicle-detail"><strong>License:</strong> <span>${currentVehicle.license_plate}</span></div>
+                            <div class="vehicle-detail"><strong>Status:</strong> <span style="color: green; font-weight: bold;">${currentVehicle.status}</span></div>
+                        `;
+                        
+                        document.getElementById(`book-btn-${user}`).disabled = false;
+                        addLog(user, 'success', `Vehicle loaded: ${currentVehicle.make} ${currentVehicle.model}`);
+                    }
+                    
+                    addLog(1, 'info', '✅ Ready to book! Click "Book This Vehicle"');
+                    addLog(2, 'info', '✅ Ready to book! Click "Book This Vehicle"');
+                } else {
+                    addLog(1, 'error', 'No available vehicles found');
+                    addLog(2, 'error', 'No available vehicles found');
+                }
+            } catch (error) {
+                addLog(1, 'error', `Error: ${error.message}`);
+                addLog(2, 'error', `Error: ${error.message}`);
+            }
+        }
+        
+        async function bookVehicle(user) {
+            if (!currentVehicle) {
+                addLog(user, 'error', 'No vehicle selected');
+                return;
+            }
+            
+            // Disable button
+            document.getElementById(`book-btn-${user}`).disabled = true;
+            
+            const customerName = user === 1 ? 'Alice' : 'Bob';
+            const delay = user === 1 ? 3 : 1; // Alice takes longer
+            
+            addLog(user, 'info', `${customerName} is checking vehicle ${currentVehicle.vehicle_id}...`);
+            
+            if (currentMode === 'with') {
+                addLog(user, 'info', `🔒 Using SELECT FOR UPDATE (locking row)...`);
+            } else {
+                addLog(user, 'warning', `⚠️ No locking - checking availability only...`);
+            }
+            
+            const endpoint = currentMode === 'with' ? '/api/book-with-lock' : '/api/book-without-lock';
+            
+            try {
+                addLog(user, 'info', `Processing booking (${delay} seconds)...`);
+                if (user === 2 && currentMode === 'with') {
+                    addLog(user, 'waiting', '⏳ WAITING for User 1 to release lock...');
+                }
+                
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        customer_name: customerName,
+                        customer_id: user,
+                        vehicle_id: currentVehicle.vehicle_id,
+                        delay: delay
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    addLog(user, 'success', `✅ SUCCESS! ${data.message}`);
+                    addLog(user, 'success', `Rental ID: ${data.rental_id}`);
+                    
+                    // Update vehicle status display
+                    document.getElementById(`vehicle-details-${user}`).innerHTML += `
+                        <div class="vehicle-detail" style="background: #E8F5E9; margin-top: 10px; padding: 10px; border-radius: 5px;">
+                            <strong style="color: #2E7D32;">✅ BOOKED by ${customerName}!</strong>
+                        </div>
+                    `;
+                } else {
+                    if (data.step === 'unavailable') {
+                        addLog(user, 'warning', `⚠️ Vehicle is now ${data.message}`);
+                        addLog(user, 'info', `${customerName} cannot book - someone else got it first`);
+                    } else {
+                        addLog(user, 'error', `❌ FAILED: ${data.message}`);
+                    }
+                    
+                    // Update vehicle status
+                    document.getElementById(`vehicle-details-${user}`).innerHTML += `
+                        <div class="vehicle-detail" style="background: #FFEBEE; margin-top: 10px; padding: 10px; border-radius: 5px;">
+                            <strong style="color: #C62828;">❌ Booking Failed</strong>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                addLog(user, 'error', `Error: ${error.message}`);
+            }
+        }
+        
+        async function resetDemo() {
+            clearLog(1);
+            clearLog(2);
+            
+            addLog(1, 'info', 'Resetting demo...');
+            addLog(2, 'info', 'Resetting demo...');
+            
+            try {
+                const response = await fetch('/api/reset-demo', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    addLog(1, 'success', '✅ Demo reset complete');
+                    addLog(2, 'success', '✅ Demo reset complete');
+                    
+                    // Clear vehicle info
+                    document.getElementById('vehicle-details-1').innerHTML = '<p>Click "Start Demo" to load vehicle</p>';
+                    document.getElementById('vehicle-details-2').innerHTML = '<p>Click "Start Demo" to load vehicle</p>';
+                    
+                    document.getElementById('book-btn-1').disabled = true;
+                    document.getElementById('book-btn-2').disabled = true;
+                    
+                    currentVehicle = null;
+                }
+            } catch (error) {
+                addLog(1, 'error', `Reset error: ${error.message}`);
+                addLog(2, 'error', `Reset error: ${error.message}`);
+            }
+        }
+        
+        // Auto-start demo on load
+        window.onload = function() {
+            addLog(1, 'info', 'Welcome Alice! Select a mode and click Start Demo');
+            addLog(2, 'info', 'Welcome Bob! Select a mode and click Start Demo');
+        };
+    </script>
+</body>
+</html>
+
+
+
+
+

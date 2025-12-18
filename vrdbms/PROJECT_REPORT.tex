@@ -1,0 +1,417 @@
+\documentclass[conference]{IEEEtran}
+
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{makecell}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+% SQL code styling
+\lstset{
+    language=SQL,
+    basicstyle=\ttfamily\tiny,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    numbers=none,
+    frame=none,
+    breaklines=true,
+    breakatwhitespace=true,
+    breakindent=0pt,
+    postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+    tabsize=2,
+    showspaces=false,
+    showstringspaces=false,
+    columns=flexible,
+    keepspaces=true,
+    xleftmargin=0pt,
+    xrightmargin=0pt,
+    aboveskip=5pt,
+    belowskip=5pt,
+    lineskip=-1pt
+}
+
+
+\begin{document}
+
+\title{Vehicle Rental Database Management System: Performance Optimization and Concurrency Control}
+
+\author{\IEEEauthorblockN{1\textsuperscript{st} Jahnavi Chenna}
+\IEEEauthorblockA{\textit{MS Computer Software Engineering}\\
+\textit{San José State University}\\
+jahnavi.chenna@sjsu.edu}
+\and
+\IEEEauthorblockN{2\textsuperscript{nd} Krishna Sai Akhil Nanduri}
+\IEEEauthorblockA{\textit{MS Computer Software Engineering}\\
+\textit{San José State University}\\
+krishnasaiakhil.nanduri@sjsu.edu}
+\and
+\IEEEauthorblockN{3\textsuperscript{rd} Kavya Yerneni}
+\IEEEauthorblockA{\textit{MS Computer Software Engineering}\\
+\textit{San José State University}\\
+kavya.yerneni@sjsu.edu}
+\and
+\IEEEauthorblockN{4\textsuperscript{th} Anurag Bodapally}
+\IEEEauthorblockA{\textit{MS Computer Software Engineering}\\
+\textit{San José State University}\\
+anurag.bodapally@sjsu.edu}
+}
+
+\maketitle
+
+\begin{abstract}
+This paper presents the design, implementation, and optimization of a comprehensive Vehicle Rental Database Management System (VRDBMS). The system manages all aspects of a vehicle rental business, including customer management, vehicle inventory, rental transactions, payments, and maintenance tracking. The project demonstrates advanced database concepts including third normal form (3NF) normalization, strategic indexing for performance optimization, and robust concurrency control mechanisms to prevent race conditions and data corruption. Key achievements include the implementation of 34 strategic indexes resulting in query performance improvements of up to 106x (from 3.933ms to 0.037ms), comprehensive concurrency control using SELECT FOR UPDATE locking mechanisms, and a production-ready system capable of handling 3,000+ rental records with multiple concurrent users. The system includes 8 normalized tables, 5 analytical views, 4 automated triggers, and 8 stored procedures, all implemented in PostgreSQL 14+ with a Flask web interface for demonstration purposes.
+\end{abstract}
+
+\begin{IEEEkeywords}
+database design, performance optimization, indexing, concurrency control, PostgreSQL, normalization, transactions
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+Modern vehicle rental systems face critical challenges in performance and concurrency. As the number of records grows, queries without proper indexing become slow and unscalable. Sequential scans of thousands of records result in poor user experience and system bottlenecks. Additionally, when multiple users attempt to book the same vehicle simultaneously, race conditions can occur, leading to double bookings, lost updates, and data inconsistency.
+
+This paper addresses both challenges through strategic database design, indexing optimization, and proper concurrency control mechanisms. The primary objectives of this project were to: (1) design a comprehensive database schema for a vehicle rental management system that accurately models real-world business operations, (2) implement proper database normalization to eliminate redundancy and ensure data integrity, (3) optimize query performance through strategic indexing to demonstrate measurable performance improvements, (4) implement concurrency control to prevent race conditions, double bookings, and data corruption in multi-user environments, (5) create a production-ready system with proper constraints, triggers, stored procedures, and views, and (6) demonstrate advanced database concepts including transactions, isolation levels, and locking mechanisms.
+
+The VRDBMS system manages customer information and profiles, vehicle inventory across multiple branches, rental transactions and bookings, payment processing, vehicle maintenance tracking, employee management, branch operations, and vehicle categorization and pricing. The system is implemented using PostgreSQL 14+ as the database, Python 3.x with Flask web framework for the backend, and psycopg2-binary as the database driver.
+
+\section{Database Schema and Design}
+
+\subsection{Entity-Relationship Diagram}
+
+The database schema consists of 8 core entities with well-defined relationships. The central entity is RENTAL, which connects customers, vehicles, branches, and employees. Table~\ref{tab:relationships} summarizes all entity relationships in the system.
+
+\begin{table}[htbp]
+\caption{Entity Relationships}
+\label{tab:relationships}
+\begin{center}
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Parent Entity} & \textbf{Child Entity} & \textbf{Cardinality} \\
+\hline
+CUSTOMER & RENTAL & 1:N \\
+VEHICLE & RENTAL & 1:N \\
+RENTAL & PAYMENT & 1:N \\
+VEHICLE & MAINTENANCE & 1:N \\
+BRANCH & VEHICLE & 1:N \\
+BRANCH & EMPLOYEE & 1:N \\
+EMPLOYEE & RENTAL & 1:N \\
+VEHICLE\_CATEGORY & VEHICLE & 1:N \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+The ER design follows a star-like structure with RENTAL as the central hub. Each relationship is enforced through foreign key constraints, ensuring referential integrity. The CUSTOMER to RENTAL relationship (1:N) allows one customer to have multiple rental transactions over time. Similarly, VEHICLE to RENTAL (1:N) enables vehicles to be rented multiple times, with each rental tracked separately. The RENTAL to PAYMENT relationship (1:N) supports partial payments and multiple payment methods per rental. The VEHICLE to MAINTENANCE relationship (1:N) maintains a complete service history for each vehicle. Branch management is handled through BRANCH to VEHICLE (1:N) and BRANCH to EMPLOYEE (1:N) relationships, allowing proper inventory and staff management across multiple locations.
+
+Figure~\ref{fig:er_diagram} illustrates the complete Entity-Relationship Diagram for the Vehicle Rental Database Management System, showing all entities, their attributes, primary keys, foreign keys, unique constraints, and the relationships with cardinality constraints between them.
+
+\begin{figure}[t]
+\centerline{\includegraphics[width=\columnwidth]{er_diagram}}
+\caption{Entity-Relationship Diagram for Vehicle Rental Database Management System showing all 8 entities (CUSTOMER, VEHICLE, RENTAL, PAYMENT, BRANCH, EMPLOYEE, VEHICLE\_CATEGORY, MAINTENANCE), their attributes with data types, primary keys, foreign keys, unique constraints, and relationships with cardinality constraints (1:N) between entities.}
+\label{fig:er_diagram}
+\end{figure}
+
+\subsection{Relational Schema}
+
+The database consists of 8 normalized tables as shown in Table~\ref{tab:tables}. Each table is designed with proper primary keys, foreign keys, and constraints to ensure data integrity.
+
+\begin{table}[htbp]
+\caption{Database Tables and Statistics}
+\label{tab:tables}
+\begin{center}
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Table} & \textbf{Records} & \textbf{Purpose} \\
+\hline
+customer & 515 & Customer profiles \\
+vehicle & 1,025 & Vehicle inventory \\
+rental & 3,015 & Rental transactions \\
+payment & 1,807 & Payment records \\
+branch & 5 & Office locations \\
+employee & 60 & Staff information \\
+vehicle\_category & 5 & Vehicle types \\
+maintenance & 2,025 & Service history \\
+\hline
+\textbf{Total} & \textbf{9,457} & \textbf{Complete dataset} \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\subsubsection{Table Structure}
+
+Table~\ref{tab:table_structure} provides a detailed overview of each table's key attributes, constraints, and indexes.
+
+\begin{table*}[htbp]
+\caption{Detailed Table Structure}
+\label{tab:table_structure}
+\begin{center}
+\tiny
+\renewcommand{\arraystretch}{1.6}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{|p{1.6cm}|p{1.4cm}|>{\raggedright\arraybackslash}p{7.5cm}|p{0.5cm}|}
+\hline
+\textbf{Table} & \textbf{PK} & \textbf{Key Constraints} & \textbf{I} \\
+\hline
+CUSTOMER & customer\_id & UNIQUE: email, license\_number; CHECK: age $\geq$ 18 & 4 \\
+\hline
+VEHICLE & vehicle\_id & FK: category\_id, branch\_id; UNIQUE: license\_plate, VIN; CHECK: year, mileage & 6 \\
+\hline
+RENTAL & rental\_id & FK: customer\_id, vehicle\_id, branch\_id, employee\_id; CHECK: dates valid & 8 \\
+\hline
+PAYMENT & payment\_id & FK: rental\_id; CHECK: amount $>$ 0 & 4 \\
+\hline
+BRANCH & branch\_id & UNIQUE: phone, email & 3 \\
+\hline
+EMPLOYEE & employee\_id & FK: branch\_id; UNIQUE: email; CHECK: salary $>$ 0 & 2 \\
+\hline
+VEHICLE\_CATEGORY & category\_id & UNIQUE: category\_name; CHECK: daily\_rate $>$ 0 & 2 \\
+\hline
+MAINTENANCE & maintenance\_id & FK: vehicle\_id; CHECK: cost $\geq$ 0, dates valid & 5 \\
+\hline
+\end{tabular}
+\end{center}
+\end{table*}
+
+The CUSTOMER table stores customer information with primary key \texttt{customer\_id}, unique constraints on email and license\_number, and a check constraint ensuring age $\geq$ 18. The VEHICLE table includes foreign keys to vehicle\_category and branch, with unique constraints on license\_plate and VIN, and check constraints for year and mileage validation. The RENTAL table is the central transaction table with foreign keys to customer, vehicle, branch, and employee, and includes date validation constraints ensuring end\_date $\geq$ start\_date. The PAYMENT table tracks financial transactions linked to rentals with amount validation. Additional tables include BRANCH for office locations, EMPLOYEE for staff management, VEHICLE\_CATEGORY for vehicle types and pricing, and MAINTENANCE for service history tracking.
+
+The schema uses PostgreSQL ENUM types for data consistency: \texttt{rental\_status} (pending, active, completed, cancelled), \texttt{payment\_method} (cash, credit\_card, debit\_card, online), \texttt{vehicle\_status} (available, rented, maintenance, retired), and \texttt{maintenance\_type} (routine, repair, inspection, emergency).
+
+\subsection{Normalization}
+
+The database schema is normalized to Third Normal Form (3NF) to eliminate redundancy and ensure data integrity. First Normal Form (1NF) is achieved with all attributes containing atomic values, no repeating groups, and each row uniquely identifiable by a primary key. Second Normal Form (2NF) is satisfied as all non-key attributes are fully functionally dependent on the primary key with no partial dependencies. Third Normal Form (3NF) is achieved with no transitive dependencies, where all non-key attributes depend only on the primary key.
+
+For example, the vehicle table stores \texttt{category\_id} as a foreign key rather than duplicating category information. The vehicle\_category table stores category details separately, eliminating transitive dependencies. This normalization provides reduced redundancy, improved data integrity, efficient storage, and easier maintenance.
+
+\section{Implementation}
+
+\subsection{Indexing Strategy}
+
+A total of 34 strategic indexes were implemented to optimize query performance across all tables. Table~\ref{tab:indexing} summarizes the indexing strategy.
+
+\begin{table}[htbp]
+\caption{Indexing Strategy Summary}
+\label{tab:indexing}
+\begin{center}
+\footnotesize
+\begin{tabular}{|c|c|}
+\hline
+\textbf{Index Type} & \textbf{Count} \\
+\hline
+Single-column indexes (B-tree) & 18 \\
+Composite indexes & 8 \\
+Foreign key indexes & 8 \\
+\hline
+\textbf{Total Indexes} & \textbf{34} \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+The index distribution across tables is as follows: rental table (8 indexes), vehicle table (6 indexes), maintenance table (5 indexes), customer table (4 indexes), payment table (4 indexes), branch table (3 indexes), employee table (2 indexes), and vehicle\_category table (2 indexes).
+
+Indexes were created based on: (1) query frequency for most common query patterns, (2) WHERE clause columns for frequently filtered columns, (3) JOIN operations for foreign key relationships, (4) ORDER BY clauses for columns used in sorting, and (5) composite query patterns for multi-column filters.
+
+\subsection{Query Optimization}
+
+The system implements various query types optimized for different business operations. Dashboard queries include available vehicles count, active rentals count, and total revenue calculations. Business logic queries include customer rental history and available vehicles by date range. All queries are optimized to use appropriate indexes, as demonstrated in the following examples:
+
+\subsubsection{Dashboard Queries}
+
+Dashboard queries provide real-time statistics for system monitoring:
+
+\begin{lstlisting}[caption={Available Vehicles Count}]
+
+SELECT COUNT(*) as count 
+FROM vehicle 
+WHERE status = 'available';
+\end{lstlisting}
+
+This query uses the \texttt{idx\_vehicle\_status} index for fast filtering.
+
+\begin{lstlisting}[caption={Total Revenue Calculation}]
+
+SELECT COALESCE(SUM(total_amount), 0) as revenue 
+FROM rental 
+WHERE status = 'completed';
+\end{lstlisting}
+
+This query uses the \texttt{idx\_rental\_status} index to efficiently filter completed rentals.
+
+\subsubsection{Business Logic Queries}
+
+\begin{lstlisting}[caption={Customer Rental History Query}]
+
+SELECT r.rental_id, r.rental_date, r.total_amount, 
+       v.make || ' ' || v.model AS vehicle
+FROM rental r
+JOIN vehicle v ON r.vehicle_id = v.vehicle_id
+WHERE r.customer_id = 50
+ORDER BY r.rental_date DESC;
+\end{lstlisting}
+
+This query uses the \texttt{idx\_rental\_customer} index for efficient customer lookup and the \texttt{idx\_rental\_vehicle} index for the JOIN operation.
+
+\begin{lstlisting}[caption={Available Vehicles by Date Range}]
+
+SELECT v.vehicle_id, v.make, v.model, vc.daily_rate
+FROM vehicle v
+JOIN vehicle_category vc ON v.category_id = vc.category_id
+WHERE v.status = 'available'
+AND NOT EXISTS (
+    SELECT 1 FROM rental r 
+    WHERE r.vehicle_id = v.vehicle_id 
+    AND r.status IN ('pending', 'active')
+    AND (r.start_date <= '2024-12-31' 
+         AND r.end_date >= '2024-12-10')
+);
+\end{lstlisting}
+
+This complex query uses multiple indexes: \texttt{idx\_vehicle\_status} for status filtering, \texttt{idx\_rental\_dates} for date range checking, and \texttt{idx\_rental\_status} for status filtering in the subquery.
+
+\subsection{Performance Results}
+
+Table~\ref{tab:performance} shows the measured performance improvements achieved through strategic indexing. The most significant improvement was in customer rental lookup queries, achieving a 106x speedup (from 3.933ms to 0.037ms).
+
+\begin{table}[htbp]
+\caption{Index Performance Improvements}
+\label{tab:performance}
+\begin{center}
+\begin{tabular}{|c|c|c|c|}
+\hline
+\textbf{Query Type} & \textbf{Before (ms)} & \textbf{After (ms)} & \textbf{Speedup} \\
+\hline
+Customer rental lookup & 3.933 & 0.037 & 106x \\
+Vehicle availability & 2.5 & 0.3 & 8.3x \\
+Dashboard statistics & 15.2 & 3.1 & 4.9x \\
+Date range queries & 4.8 & 0.6 & 8x \\
+Customer search & 3.2 & 0.4 & 8x \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+Resource optimization results show buffer reads reduced by 86\% (42 to 6 pages), query cost reduced by 67\% (79.69 to 25.97), and rows scanned reduced by 99.7\% (3,007 to 8 rows) for the customer rental lookup query.
+
+\subsection{Transactions and ACID Properties}
+
+All critical operations are wrapped in transactions to ensure ACID properties: Atomicity (all operations succeed or fail together), Consistency (database constraints are maintained), Isolation (concurrent transactions don't interfere), and Durability (committed changes are permanent). The system uses PostgreSQL's default isolation level READ COMMITTED for normal operations, with REPEATABLE READ available for reporting queries that require consistent snapshots.
+
+\subsection{Concurrency Control}
+
+\subsubsection{Concurrency Challenges}
+
+The system faces three primary concurrency challenges: (1) Race conditions where two users attempt to book the same vehicle simultaneously, (2) Lost updates where concurrent updates overwrite each other's changes, and (3) Phantom reads where new rows appear during a transaction causing inconsistent results.
+
+\subsubsection{Concurrency Solutions}
+
+The primary mechanism for preventing race conditions is pessimistic locking using SELECT FOR UPDATE:
+
+\begin{lstlisting}[caption={Pessimistic Locking Example}]
+
+BEGIN;
+SELECT * FROM vehicle 
+WHERE vehicle_id = 15 
+FOR UPDATE;
+-- Other transactions must wait
+UPDATE vehicle SET status = 'rented' 
+WHERE vehicle_id = 15;
+COMMIT; -- Releases lock
+\end{lstlisting}
+
+This approach prevents race conditions, ensures only one user can book a vehicle at a time, and maintains data integrity. Additionally, atomic operations prevent lost updates by using SQL operations like \texttt{UPDATE vehicle SET mileage = mileage + 100}, and the SKIP LOCKED pattern enables non-blocking parallel processing for job queues.
+
+The system includes concurrency-safe stored procedures: \texttt{book\_vehicle\_safe()} for race-condition-proof booking, \texttt{activate\_rental\_safe()} for safe activation, \texttt{complete\_rental\_safe()} for safe completion, and \texttt{cancel\_rental\_safe()} for safe cancellation.
+
+\subsubsection{Concurrency Testing Results}
+
+Test scenarios demonstrate that without locking, two users can both check a vehicle as available and both create rentals, resulting in double booking. With SELECT FOR UPDATE, User A locks the vehicle, User B waits, and when User A commits, User B sees the vehicle is rented and the booking fails appropriately. Results show zero race conditions with proper locking, 100\% data integrity maintained under concurrent load, proper transaction isolation, and thread-safe API endpoints.
+
+\subsection{Triggers and Stored Procedures}
+
+The system includes four automated triggers: (1) \texttt{trigger\_update\_vehicle\_status} automatically updates vehicle status when rental status changes, (2) \texttt{trigger\_calculate\_rental\_amount} automatically calculates total\_amount based on rental dates and daily\_rate, (3) \texttt{trigger\_update\_vehicle\_timestamp} and \texttt{trigger\_update\_rental\_timestamp} automatically update timestamps, and (4) \texttt{trigger\_update\_last\_maintenance} updates vehicle's last\_maintenance\_date when maintenance is recorded.
+
+Four stored procedures provide business logic encapsulation: \texttt{create\_rental()} safely creates rentals with validation, \texttt{complete\_rental()} completes rental transactions, \texttt{process\_payment()} records payment transactions, and \texttt{get\_available\_vehicles\_by\_date()} finds available vehicles for a date range.
+
+\subsection{Analytical Views}
+
+The system includes 5 pre-defined views for common reporting needs: (1) \texttt{available\_vehicles} lists all currently available vehicles with category and branch information, (2) \texttt{active\_rentals} shows all active rentals with customer and vehicle details, (3) \texttt{customer\_rental\_history} aggregates rental statistics per customer, (4) \texttt{vehicle\_maintenance\_summary} tracks maintenance history and costs per vehicle, and (5) \texttt{branch\_revenue} calculates revenue and rental statistics per branch.
+
+\section{Results}
+
+\subsection{Performance Optimization Results}
+
+The system demonstrates excellent scalability, tested with 3,015 rental records. Performance improvements scale with data volume, and the system is ready for production use with 10,000+ records. Indexes provide consistent performance as data grows.
+
+\subsection{Concurrency Control Results}
+
+Concurrency testing shows zero race conditions with SELECT FOR UPDATE, 100\% data integrity maintained under concurrent load, proper handling of simultaneous bookings, and correct transaction isolation. Locking overhead is minimal (less than 1ms additional latency), with benefits far outweighing costs.
+
+\subsection{System Completeness}
+
+The system includes 8 normalized tables (3NF compliance), 34 performance indexes, 5 analytical views, 4 automated triggers, 8 stored procedures, 4 custom ENUM types, and comprehensive constraints (CHECK, UNIQUE, FOREIGN KEY). The application features include a Flask web interface for demonstration, dashboard with real-time statistics, concurrency demo UI showing race conditions, RESTful API endpoints, and thread-safe operations.
+
+Data quality is maintained with 9,457 total records across all tables, realistic test data representing actual business scenarios, data integrity maintained through constraints, and referential integrity enforced through foreign keys.
+
+\section{Challenges and Solutions}
+
+\subsection{Technical Challenges}
+
+Index selection required determining which columns to index without over-indexing, which would slow down INSERT/UPDATE operations. The solution involved analyzing query patterns, using EXPLAIN ANALYZE to measure actual performance, starting with foreign keys and frequently filtered columns, adding composite indexes for multi-column queries, and monitoring index usage. The outcome was successfully implementing 34 indexes with measurable performance improvements and minimal write overhead.
+
+Concurrency testing required demonstrating race conditions and their solutions in a controlled environment. The solution involved creating interactive test scripts for two terminals, building a web UI showing concurrent access visually, using delays to simulate real-world timing, and documenting scenarios with clear before/after comparisons.
+
+Data generation required creating realistic test data (3,000+ records) that maintains referential integrity. The solution involved developing SQL scripts to generate test data systematically, ensuring foreign key relationships are maintained, creating realistic date ranges and amounts, and validating data against all constraints.
+
+\subsection{Design Challenges}
+
+Normalization trade-offs required balancing normalization with query performance. The solution maintained 3NF for data integrity, used views and indexes to optimize query performance, and kept denormalization minimal and well-documented. Date range queries required efficiently finding available vehicles for a date range without conflicts, solved by creating composite indexes on start\_date and end\_date, using NOT EXISTS subqueries to check for conflicts, and optimizing with proper indexing.
+
+\section{Conclusion}
+
+This project successfully demonstrates the design and implementation of a production-ready vehicle rental database management system. Key achievements include: (1) comprehensive database design with a well-normalized schema (3NF) with 8 core tables, (2) performance optimization with 34 strategic indexes resulting in query performance improvements of up to 106x faster, (3) concurrency control with robust locking mechanisms that completely eliminate race conditions, (4) production-ready features with triggers, stored procedures, views, and comprehensive constraints, and (5) measurable results with real performance metrics on a dataset of 3,000+ records.
+
+Key takeaways include: (1) indexes are essential for performance, providing 3-10x improvement in query execution time, (2) concurrency control is critical, with SELECT FOR UPDATE preventing race conditions effectively, and (3) proper design enables scalability through normalized schema, strategic indexes, safe functions, and comprehensive constraints.
+
+Future enhancements could include advanced analytics through data warehousing, full-text search capabilities, table partitioning for very large datasets, read replicas for high-availability, Redis caching for frequently accessed data, API security with authentication and authorization, and audit logging for compliance and debugging.
+
+\section*{Acknowledgment}
+
+The authors would like to thank the Database Systems course instructors for their guidance and support throughout this project.
+
+\begin{thebibliography}{00}
+\bibitem{b1} A. Silberschatz, H. F. Korth, and S. Sudarshan, Database System Concepts, 7th ed. New York, NY, USA: McGraw-Hill Education, 2019.
+
+\bibitem{b2} R. Ramakrishnan and J. Gehrke, Database Management Systems, 3rd ed. New York, NY, USA: McGraw-Hill, 2003.
+
+\bibitem{b3} C. J. Date, An Introduction to Database Systems, 8th ed. Boston, MA, USA: Addison-Wesley, 2003.
+
+\bibitem{b4} PostgreSQL Global Development Group, ``PostgreSQL 14 Documentation,'' 2024. [Online]. Available: https://www.postgresql.org/docs/14/
+
+\bibitem{b5} PostgreSQL Global Development Group, ``PostgreSQL Index Types,'' 2024. [Online]. Available: https://www.postgresql.org/docs/14/indexes-types.html
+
+\bibitem{b6} PostgreSQL Global Development Group, ``PostgreSQL Concurrency Control,'' 2024. [Online]. Available: https://www.postgresql.org/docs/14/mvcc.html
+
+\bibitem{b7} PostgreSQL Global Development Group, ``PostgreSQL Locking,'' 2024. [Online]. Available: https://www.postgresql.org/docs/14/explicit-locking.html
+
+\bibitem{b8} ``Use The Index, Luke! SQL Indexing and Tuning Guide,'' 2024. [Online]. Available: https://use-the-index-luke.com/
+
+\bibitem{b9} ``PostgreSQL Tutorial: Performance Tuning,'' 2024. [Online]. Available: https://www.postgresqltutorial.com/postgresql-performance/
+
+\bibitem{b10} Flask Development Team, ``Flask Web Framework,'' 2024. [Online]. Available: https://flask.palletsprojects.com/
+
+\end{thebibliography}
+
+\end{document}
+
